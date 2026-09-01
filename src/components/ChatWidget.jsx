@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, Fragment } from "react";
-import { Aperture, X, Send } from "lucide-react";
+import { Aperture, X, Send, Check } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 /**
@@ -7,8 +7,8 @@ import { useLanguage } from "../context/LanguageContext.jsx";
  * **bold**, `* bullet` lines — same as any chat model does by default.
  * The widget has no reason to show those characters literally, so this
  * renders the handful of patterns that actually show up in booking
- * replies (bold, bullets) without pulling in a full Markdown library
- * for a few dozen lines of chat text.
+ * replies (bold, bullets, "---" dividers) without pulling in a full
+ * Markdown library for a few dozen lines of chat text.
  */
 function renderInline(text, keyPrefix) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
@@ -20,23 +20,103 @@ function renderInline(text, keyPrefix) {
   });
 }
 
+/** Render an array of raw text lines as paragraphs + bullet rows. */
+function renderLines(lines, keyPrefix) {
+  return lines.map((line, i) => {
+    const key = `${keyPrefix}-${i}`;
+    const bulletMatch = line.match(/^\s*[*-]\s+(.*)$/);
+    if (bulletMatch) {
+      return (
+        <div key={key} className="flex gap-2 pl-1">
+          <span aria-hidden="true" className="text-potaccent">
+            •
+          </span>
+          <span>{renderInline(bulletMatch[1], key)}</span>
+        </div>
+      );
+    }
+    return (
+      <div key={key}>
+        {line.length ? renderInline(line, key) : " "}
+      </div>
+    );
+  });
+}
+
+const isRuleLine = (line) => /^\s*---\s*$/.test(line);
+
+/**
+ * Splits a reply into blocks. A lone "---" line becomes a visual divider
+ * instead of three literal dashes; a run of lines fenced between two "---"
+ * lines (how the booking flow emits its summary) becomes a distinct
+ * card-like block.
+ */
 function MessageText({ text }) {
+  const { t } = useLanguage();
   const lines = text.split("\n");
+  const blocks = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    if (isRuleLine(lines[i])) {
+      let j = i + 1;
+      while (j < lines.length && !isRuleLine(lines[j])) j++;
+
+      if (j < lines.length) {
+        let inner = lines.slice(i + 1, j);
+        while (inner.length && !inner[0].trim()) inner = inner.slice(1);
+        while (inner.length && !inner[inner.length - 1].trim()) {
+          inner = inner.slice(0, -1);
+        }
+        blocks.push(
+          inner.length ? { type: "card", lines: inner } : { type: "rule" }
+        );
+        i = j + 1;
+      } else {
+        blocks.push({ type: "rule" });
+        i += 1;
+      }
+      continue;
+    }
+
+    let k = i;
+    while (k < lines.length && !isRuleLine(lines[k])) k++;
+    blocks.push({ type: "text", lines: lines.slice(i, k) });
+    i = k;
+  }
+
   return (
     <>
-      {lines.map((line, i) => {
-        const bulletMatch = line.match(/^\s*[*-]\s+(.*)$/);
-        if (bulletMatch) {
+      {blocks.map((block, bi) => {
+        const key = `b-${bi}`;
+        if (block.type === "rule") {
+          return <hr key={key} className="my-2.5 h-px border-0 bg-potborder" />;
+        }
+        if (block.type === "card") {
           return (
-            <div key={i} className="flex gap-2 pl-1">
-              <span aria-hidden="true">•</span>
-              <span>{renderInline(bulletMatch[1], i)}</span>
+            <div
+              key={key}
+              className="pot-summary-card my-1.5 overflow-hidden rounded-xl border border-potborder bg-potbg"
+            >
+              <div className="flex items-center gap-1.5 border-b border-potborder px-3 py-1.5">
+                <Aperture
+                  className="h-3.5 w-3.5 flex-none text-potaccent"
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-potmuted">
+                  {t("widget.summaryLabel")}
+                </span>
+              </div>
+              <div className="space-y-1 px-3 py-2.5">
+                {renderLines(block.lines, key)}
+              </div>
             </div>
           );
         }
         return (
-          <div key={i}>
-            {line.length ? renderInline(line, i) : "\u00A0"}
+          <div key={key} className="space-y-1">
+            {renderLines(block.lines, key)}
           </div>
         );
       })}
@@ -70,11 +150,11 @@ const POT_TOKEN =
 const LOCATIONS = ["karlskrona", "karlshamn"];
 
 export default function ChatWidget({ isOpen, onOpenChange }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   const [location, setLocation] = useState("karlskrona");
   const [messages, setMessages] = useState(() => [
-    { role: "assistant", text: t("widget.greeting") },
+    { role: "assistant", text: t("widget.greeting"), at: Date.now() },
   ]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -86,6 +166,12 @@ export default function ChatWidget({ isOpen, onOpenChange }) {
   );
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+
+  const formatTime = (ts) =>
+    new Date(ts).toLocaleTimeString(lang === "en" ? "en-GB" : "sv-SE", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -104,7 +190,7 @@ export default function ChatWidget({ isOpen, onOpenChange }) {
     const text = input.trim();
     if (!text || isSending) return;
 
-    setMessages((prev) => [...prev, { role: "user", text }]);
+    setMessages((prev) => [...prev, { role: "user", text, at: Date.now() }]);
     setInput("");
     setIsSending(true);
     setError(null);
@@ -131,7 +217,10 @@ export default function ChatWidget({ isOpen, onOpenChange }) {
         throw new Error(data?.reply || t("widget.networkError"));
       }
 
-      setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: reply, at: Date.now() },
+      ]);
     } catch (err) {
       setError(err.message || t("widget.genericError"));
     } finally {
@@ -232,30 +321,68 @@ export default function ChatWidget({ isOpen, onOpenChange }) {
 
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={"flex " + (m.role === "user" ? "justify-end" : "justify-start")}
-              >
+            {messages.map((m, i) => {
+              const isUser = m.role === "user";
+              return (
                 <div
+                  key={i}
                   className={
-                    "max-w-[80%] space-y-1 px-4 py-2.5 text-sm leading-relaxed " +
-                    (m.role === "user"
-                      ? "rounded-2xl rounded-br-md bg-potaccent text-potoncaccent"
-                      : "rounded-2xl rounded-bl-md bg-potsurface text-potink")
+                    "pot-msg-in flex flex-col gap-1 " +
+                    (isUser ? "items-end" : "items-start")
                   }
                 >
-                  <MessageText text={m.text} />
+                  <div
+                    className={
+                      "max-w-[80%] space-y-1 px-4 py-2.5 text-sm leading-relaxed " +
+                      (isUser
+                        ? "rounded-2xl rounded-br-md bg-potaccent text-potoncaccent"
+                        : "rounded-2xl rounded-bl-md bg-potsurface text-potink")
+                    }
+                  >
+                    <MessageText text={m.text} />
+                  </div>
+                  {m.at && (
+                    <div
+                      className={
+                        "flex items-center gap-1 px-1 text-[10px] text-potmuted " +
+                        (isUser ? "flex-row-reverse" : "")
+                      }
+                    >
+                      <span>{formatTime(m.at)}</span>
+                      {isUser && (
+                        <Check
+                          className="h-3 w-3"
+                          strokeWidth={2.5}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {isSending && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-potsurface px-4 py-3">
-                  <span className="pot-dot h-1.5 w-1.5 rounded-full bg-potmuted" style={{ animationDelay: "0ms" }} />
-                  <span className="pot-dot h-1.5 w-1.5 rounded-full bg-potmuted" style={{ animationDelay: "150ms" }} />
-                  <span className="pot-dot h-1.5 w-1.5 rounded-full bg-potmuted" style={{ animationDelay: "300ms" }} />
+              <div className="pot-msg-in flex justify-start">
+                <div
+                  className="flex items-center gap-2.5 rounded-2xl rounded-bl-md bg-potsurface px-4 py-3"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span className="relative flex h-5 w-5 flex-none items-center justify-center">
+                    <span
+                      className="pot-lens-ring absolute inset-0 rounded-full"
+                      aria-hidden="true"
+                    />
+                    <Aperture
+                      className="pot-aperture-focus h-5 w-5 text-potaccent"
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
+                  </span>
+                  <span className="pot-type-label text-xs text-potmuted">
+                    {t("widget.typing")}
+                  </span>
                 </div>
               </div>
             )}

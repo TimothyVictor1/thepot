@@ -74,6 +74,8 @@ export const strings = {
       languageNote:
         "Det här styr bara den här menyn — Mötesstrategen svarar alltid på det språk du skriver på.",
       badgeRing: "FRÅGA MÖTESSTRATEGEN",
+      typing: "Mötesstrategen skriver…",
+      summaryLabel: "Sammanfattning",
     },
   },
 
@@ -147,6 +149,8 @@ export const strings = {
       languageNote:
         "This only changes this menu — Mötesstrategen always replies in whatever language you write in.",
       badgeRing: "ASK MÖTESSTRATEGEN",
+      typing: "Mötesstrategen is typing…",
+      summaryLabel: "Summary",
     },
   },
 };
