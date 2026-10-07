@@ -201,10 +201,6 @@ export default function ChatWidget({ isOpen, onOpenChange }) {
         headers: {
           "Content-Type": "application/json",
           "x-pot-token": POT_TOKEN,
-          // ngrok's free tier answers browser requests with an HTML
-          // "you are about to visit" warning page instead of forwarding
-          // them to n8n. This header tells ngrok to skip that page.
-          "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({
           sessionId: sessionIdRef.current,
