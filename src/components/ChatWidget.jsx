@@ -143,7 +143,7 @@ function MessageText({ text }) {
  *    server-side and don't depend on this value staying secret.
  * ──────────────────────────────────────────────────────────────────────
  */
-const WEBHOOK_URL = "https://rtimvic.app.n8n.cloud/webhook/thepot-chat";
+const WEBHOOK_URL = "https://deflator-pretzel-tweak.ngrok-free.dev/webhook/thepot-chat";
 const POT_TOKEN =
   "64338df113c1508ba38f50024e1c1ca51c36d2b9127766cc13b5090709f20496";
 
