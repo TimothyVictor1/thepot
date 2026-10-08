@@ -38,6 +38,9 @@ html.dark {
 html.dark {
   --pot-hero-ink: #ffffff;
   --pot-hero-muted: rgba(255, 255, 255, 0.72);
+  /* Text on the hero's solid white pill — fixed dark so it never
+     flips to the light dark-mode ink and vanishes into the white. */
+  --pot-hero-pill-ink: #14110e;
 }
 
 html,

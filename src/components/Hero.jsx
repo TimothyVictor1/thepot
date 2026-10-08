@@ -42,7 +42,10 @@ export default function Hero({ onOpenChat }) {
         {/* Same button-row pattern as the real hero: a row of pill
             actions, plus one filled brand-purple call to action. */}
         <div className="mt-8 flex flex-wrap items-center gap-2.5">
-          <span className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-potink">
+          <span
+            className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold"
+            style={{ color: "var(--pot-hero-pill-ink)" }}
+          >
             {t("nav.conference")}
           </span>
           <span
