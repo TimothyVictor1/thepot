@@ -37,7 +37,7 @@ function renderLines(lines, keyPrefix) {
     }
     return (
       <div key={key}>
-        {line.length ? renderInline(line, key) : " "}
+        {line.length ? renderInline(line, key) : " "}
       </div>
     );
   });
@@ -127,25 +127,16 @@ function MessageText({ text }) {
 /**
  * ── Backend wiring ──────────────────────────────────────────────────────
  *
- * Two things to fix before this goes live on thepot.se:
+ * The widget talks to our own serverless endpoint (/api/chat, see
+ * api/chat.js). That function signs each request with HMAC-SHA256 and
+ * forwards it to n8n. The signing secret lives only in Vercel's
+ * environment variables and in n8n, never in this browser bundle.
  *
- * 1. CORS on the n8n Webhook node is currently open to any origin, so
- *    this could be developed and tested from anywhere. Lock it to the
- *    real domain(s) before launch.
- *
- * 2. POT_TOKEN below ships inside this client bundle, so it's readable
- *    by anyone once deployed (browser network tab, page source). That's
- *    true of any secret placed in frontend code — not a flaw specific
- *    to this widget. It does the same job the backend's own timestamp
- *    check does: a basic filter against casual spam and replay, not
- *    real access control. The actual protections (rate limiting, PII
- *    tokenisation, a human confirming every booking by email) all live
- *    server-side and don't depend on this value staying secret.
+ * Local development: `vite` alone does not serve /api. Use `vercel dev`,
+ * or point VITE_CHAT_ENDPOINT at a deployed /api/chat.
  * ──────────────────────────────────────────────────────────────────────
  */
-const WEBHOOK_URL = "https://deflator-pretzel-tweak.ngrok-free.dev/webhook/thepot-chat";
-const POT_TOKEN =
-  "64338df113c1508ba38f50024e1c1ca51c36d2b9127766cc13b5090709f20496";
+const CHAT_ENDPOINT = import.meta.env.VITE_CHAT_ENDPOINT || "/api/chat";
 
 const LOCATIONS = ["karlskrona", "karlshamn"];
 
@@ -196,17 +187,13 @@ export default function ChatWidget({ isOpen, onOpenChange }) {
     setError(null);
 
     try {
-      const res = await fetch(WEBHOOK_URL, {
+      const res = await fetch(CHAT_ENDPOINT, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-pot-token": POT_TOKEN,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: sessionIdRef.current,
           message: text,
           location,
-          timestamp: Date.now(),
         }),
       });
 
